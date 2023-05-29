@@ -3,3 +3,5 @@ declare namespace JSX {
       [tagName:string]: any
     }
   }
+
+export{}
