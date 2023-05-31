@@ -1,109 +1,357 @@
 
-const squares = document.querySelectorAll('.grid div')
-const scoreDisplay = document.querySelector('span')
-const startBtn = document.querySelector('.start')
+// ADD time?
 
-const width = 10
-let currentIndex = 0 //so first div in our grid
-let appleIndex = 0 //so first div in our grid
-let currentSnake = [2,1,0] 
-let direction = 1
-let score = 0
-let speed = 0.9
-let intervalTime = 0
-let interval = 0
+var snakeTable = document.querySelector(".snakeTable");
+var boxes = document.getElementsByClassName("box");
+var modul = document.querySelector(".modul");
+var start = document.querySelector(".start");
 
-var alanBtnInstance = alanBtn({
-  key: "84f599eb8cc946bebbc2eced81cfcd2f2e956eca572e1d8b807a3e2338fdd0dc/stage",
-  onCommand: function (commandData) {
-    if(commandData.command === "right") {
-      direction = 1 //if we press the right arrow on our keyboard, the snake will go right one
-    } else if (commandData.command === "up") {
-      direction = -width // if we press the up arrow, the snake will go back ten divs, appearing to go up
-    } else if (commandData.command === "left") {
-      direction = -1 // if we press left, the snake will go left one div
-    } else if (commandData.command === "down") {
-      direction = +width //if we press down, the snake head will instantly appear in the div ten divs from where you are now
-    }
-  },
-  rootEl: document.getElementById("alan-btn"),
+var table = {
+  rowsCols: 21,
+  boxes: 21*21
+};
+
+var snake = {
+  direction: "right",
+  position: [[6,10], [7,10], [8,10], [9,10], [10,10]],
+  interval: 200,
+  food: 0,
+  score: 0,
+  final: 0,
+  time: 0,
+  canTurn: 0,
+  init: function() {
+    snake.direction = "right";
+    snake.position = [[6,10], [7,10], [8,10], [9,10], [10,10]];
+    snake.interval = 200;
+    snake.food = 0;
+    snake.score = 0;
+    snake.time = 0;
+    snake.canTurn = 0;
+    snakeTable.innerHTML = "";
+    tableCreation();
+  }
+};
+
+// init game
+snake.init();
+
+start.addEventListener("click", startSnake);
+
+document.addEventListener("keydown", function(e) {
+  if (e.keyCode === 13 && snake.time === 0) {
+    startSnake();
+  }
 });
 
-//to start, and restart the game
-function startGame() {
-  currentSnake.forEach(index => squares[index].classList.remove('snake'))
-  squares[appleIndex].classList.remove('apple')
-  clearInterval(interval)
-  score = 0
-  randomApple()
-  direction = 1
-  scoreDisplay.innerText = score
-  intervalTime = 1000
-  currentSnake = [2,1,0]
-  currentIndex = 0
-  currentSnake.forEach(index => squares[index].classList.add('snake'))
-  interval = setInterval(moveOutcomes, intervalTime)
+// start game
+function startSnake() {
+  modul.classList.add("hidden");
+  // clearInterval(checkPageInterval);
+  snake.time = 1;
+  renderSnake();
+  randomFood();
+  // interval, heart of the game
+  setInt = setInterval(function() {
+    move();
+  }, snake.interval);
 }
 
-
-//function that deals with ALL the ove outcomes of the Snake
-function moveOutcomes() {
-
-  //deals with snake hitting border and snake hitting self
-  if (
-    (currentSnake[0] + width >= (width * width) && direction === width ) || //if snake hits bottom
-    (currentSnake[0] % width === width -1 && direction === 1) || //if snake hits right wall
-    (currentSnake[0] % width === 0 && direction === -1) || //if snake hits left wall
-    (currentSnake[0] - width < 0 && direction === -width) ||  //if snake hits the top
-    squares[currentSnake[0] + direction].classList.contains('snake') //if snake goes into itself
-  ) {
-    return clearInterval(interval) //this will clear the interval if any of the above happen
-  }
-
-  const tail = currentSnake.pop() //removes last ite of the array and shows it
-  squares[tail].classList.remove('snake')  //removes class of snake from the TAIL
-  currentSnake.unshift(currentSnake[0] + direction) //gives direction to the head of the array
-
-  //deals with snake getting apple
-  if(squares[currentSnake[0]].classList.contains('apple')) {
-    squares[currentSnake[0]].classList.remove('apple')
-    squares[tail].classList.add('snake')
-    currentSnake.push(tail)
-    randomApple()
-    score++
-    scoreDisplay.textContent = score
-    clearInterval(interval)
-    intervalTime = intervalTime * speed
-    interval = setInterval(moveOutcomes, intervalTime)
-  }
-  squares[currentSnake[0]].classList.add('snake')
+// end of game
+function stopp() {
+  clearInterval(setInt);
+  snake.final = snake.score;
+  start.querySelector("span").innerHTML = snake.final + " Points !";
+  setTimeout(function() {
+    start.querySelector("span").innerHTML = "Play Snake";
+  }, 1500);
+  snake.init();
+  modul.classList.remove("hidden");
 }
 
-
-//generate new apple once apple is eaten
-function randomApple() {
-  do{
-    appleIndex = Math.floor(Math.random() * squares.length)
-  } while(squares[appleIndex].classList.contains('snake')) //making sure apples dont appear on the snake
-  squares[appleIndex].classList.add('apple')
+// move the snake function
+function move() {
+  // check if move allowed & then eat food
+  hitFood();
+  hitBorder();
+  hitSnake();
+  // actually move the snake
+  updatePositions();
+  renderSnake();
+  document.addEventListener("keydown", turn);
+  snake.canTurn = 1;
 }
 
-
-//assign functions to keycodes
-function control(e) {
-  squares[currentIndex].classList.remove('snake')
-
-  if(e.keyCode === 39) {
-    direction = 1 //if we press the right arrow on our keyboard, the snake will go right one
-  } else if (e.keyCode === 38) {
-    direction = -width // if we press the up arrow, the snake will go back ten divs, appearing to go up
-  } else if (e.keyCode === 37) {
-    direction = -1 // if we press left, the snake will go left one div
-  } else if (e.keyCode === 40) {
-    direction = +width //if we press down, the snake head will instantly appear in the div ten divs from where you are now
+function updatePositions() {
+  // remove last snake part (first snake pos)
+  boxes[snake.position[0][0] + snake.position[0][1] * table.rowsCols].classList.remove("snake");
+  snake.position.shift();
+  // add new snake part
+  var head = snake.position[snake.position.length - 1];
+  switch (snake.direction) {
+    case "left":
+      snake.position.push([head[0] - 1, head[1]]);
+      break;
+    case "up":
+      snake.position.push([head[0], head[1] - 1]);
+      break;
+    case "right":
+      snake.position.push([head[0] + 1, head[1]]);
+      break;
+    case "down":
+      snake.position.push([head[0], head[1] + 1]);
+      break;
+    default:
+      console.log("no direction !");
   }
 }
 
-document.addEventListener('keyup', control)
-startBtn.addEventListener('click', startGame)
+// checks border contact
+function hitBorder() {
+  var headPos = snake.position.length-1;
+  // goes of limits
+  if (((snake.position[headPos][0] === table.rowsCols-1) && (snake.direction === "right")) || ((snake.position[headPos][0] === 0) && (snake.direction === "left")) || ((snake.position[headPos][1] === table.rowsCols-1) && (snake.direction === "down")) ||  ((snake.position[headPos][1] === 0) && (snake.direction === "up"))) {
+    // console.log("border hit");
+    stopp();
+  }
+}
 
+// checks self contact
+function hitSnake() {
+  var headPos = snake.position.length-1;
+  for (var i=0; i<headPos; i++) {
+    if (snake.position[headPos].toString() === snake.position[i].toString()) {
+      // console.log("snake hit");
+      stopp();
+    }
+  } 
+}
+
+// checks food contact
+function hitFood() {
+  var head = snake.position[snake.position.length-1];
+  var tail = snake.position[0];
+  if (head.toString() === foodPos.toString()) {
+    boxes[random].classList.remove("food");
+    snake.position.unshift(tail);
+    randomFood();
+    snake.food++;
+    snake.score += snake.food;
+    scoreElt.innerHTML = snake.score + " pts";
+    // increase speed
+    clearInterval(setInt);
+    snake.interval = snake.interval - snake.interval/40;
+    setInt = setInterval(function() {
+      move();
+    }, snake.interval);
+  }
+}
+
+// random 'food'
+function randomFood() {
+  var randomX = Math.floor(Math.random() * table.rowsCols);
+  var randomY = Math.floor(Math.random() * table.rowsCols);
+  random = randomX + randomY * table.rowsCols;
+  // picks another foodPos if food pops on snake
+  while (boxes[random].classList.contains("snake")) {
+    randomX = Math.floor(Math.random() * table.rowsCols);
+    randomY = Math.floor(Math.random() * table.rowsCols);
+    random = randomX + randomY * table.rowsCols;
+  }  
+  boxes[random].classList.add("food");
+  foodPos = [randomX, randomY];
+}
+
+// read positions and render the snake
+function renderSnake() {
+  for (var i=0; i<snake.position.length; i++) {
+    boxes[snake.position[i][0] + snake.position[i][1] * table.rowsCols].classList.add("snake");
+  }
+}
+
+// keypress handling to turn
+function turn(e) {
+  if (snake.canTurn) {
+    switch (e.keyCode) {
+      case 13:
+        // document.removeEventListener()
+        break;
+      case 37:// left
+        if (snake.direction === "right") return;
+        snake.direction = "left";
+        break;
+      case 38:// up
+        if (snake.direction === "down") return;
+        snake.direction = "up";
+        break;
+      case 39:// right
+        if (snake.direction === "left") return;
+        snake.direction = "right";
+        break;
+      case 40:// down
+        if (snake.direction === "up") return;
+        snake.direction = "down";
+        break;
+      default:
+        console.log("wrong key");
+    }
+    snake.canTurn = 0;
+  }
+}
+
+// table creation
+function tableCreation() {
+  if (snakeTable.innerHTML === "") {
+    // main table
+    for (var i = 0; i<table.boxes; i++) {
+      var divElt = document.createElement("div");
+      divElt.classList.add("box");
+      snakeTable.appendChild(divElt);
+    }
+    // status bar
+    var statusElt = document.createElement("div");
+    statusElt.classList.add("status");
+    snakeTable.appendChild(statusElt);
+    scoreElt = document.createElement("span");
+    scoreElt.classList.add("score");
+    scoreElt.innerHTML = snake.score + " pts";
+    statusElt.appendChild(scoreElt);
+  }
+}
+
+// handle focus of the page
+// function checkPageFocus() {
+//   if (document.hasFocus()) {
+//     modul.classList.remove("hidden");
+//   }
+//   else {
+//     modul.classList.add("hidden");
+//   }
+// }
+// var checkPageInterval = setInterval(checkPageFocus, 300);
+
+// swipe Showcase
+$("document").ready(function() {
+  $("body")
+    .swipeDetector()
+    .on("swipeLeft.sd swipeRight.sd swipeUp.sd swipeDown.sd", function(event) {
+      if (event.type === "swipeLeft") {
+        if (snake.direction === "right") return;
+        snake.direction = "left";
+      } else if (event.type === "swipeRight") {
+        if (snake.direction === "left") return;
+        snake.direction = "right";
+      } else if (event.type === "swipeUp") {
+        if (snake.direction === "down") return;
+        snake.direction = "up";
+      } else if (event.type === "swipeDown") {
+        if (snake.direction === "up") return;
+        snake.direction = "down";
+      }
+      snake.canTurn = 0;
+    });
+});
+
+// swipe function --> credit: https://codepen.io/AlexEmashev/pen/BKgQdx?editors=0100
+(function($) {
+  $.fn.swipeDetector = function(options) {
+    // States: 0 - no swipe, 1 - swipe started, 2 - swipe released
+    var swipeState = 0;
+    // Coordinates when swipe started
+    var startX = 0;
+    var startY = 0;
+    // Distance of swipe
+    var pixelOffsetX = 0;
+    var pixelOffsetY = 0;
+    // Target element which should detect swipes.
+    var swipeTarget = this;
+    var defaultSettings = {
+      // Amount of pixels, when swipe don't count.
+      swipeThreshold: 30,
+      // Flag that indicates that plugin should react only on touch events.
+      // Not on mouse events too.
+      useOnlyTouch: true
+    };
+
+    // Initializer
+    (function init() {
+      options = $.extend(defaultSettings, options);
+      // Support touch and mouse as well.
+      swipeTarget.on("mousedown touchstart", swipeStart);
+      $("html").on("mouseup touchend", swipeEnd);
+      $("html").on("mousemove touchmove", swiping);
+    })();
+
+    function swipeStart(event) {
+      if (options.useOnlyTouch && !event.originalEvent.touches) return;
+
+      if (event.originalEvent.touches) event = event.originalEvent.touches[0];
+
+      if (swipeState === 0) {
+        swipeState = 1;
+        startX = event.clientX;
+        startY = event.clientY;
+      }
+    }
+
+    function swipeEnd(event) {
+      if (swipeState === 2) {
+        swipeState = 0;
+
+        if (
+          Math.abs(pixelOffsetX) > Math.abs(pixelOffsetY) &&
+          Math.abs(pixelOffsetX) > options.swipeThreshold
+        ) {
+          // Horizontal Swipe
+          if (pixelOffsetX < 0) {
+            swipeTarget.trigger($.Event("swipeLeft.sd"));
+          } else {
+            swipeTarget.trigger($.Event("swipeRight.sd"));
+          }
+        } else if (Math.abs(pixelOffsetY) > options.swipeThreshold) {
+          // Vertical swipe
+          if (pixelOffsetY < 0) {
+            swipeTarget.trigger($.Event("swipeUp.sd"));
+          } else {
+            swipeTarget.trigger($.Event("swipeDown.sd"));
+          }
+        }
+      }
+    }
+
+    function swiping(event) {
+      // If swipe don't occuring, do nothing.
+      if (swipeState !== 1) return;
+
+      if (event.originalEvent.touches) {
+        event = event.originalEvent.touches[0];
+      }
+
+      var swipeOffsetX = event.clientX - startX;
+      var swipeOffsetY = event.clientY - startY;
+
+      if (
+        Math.abs(swipeOffsetX) > options.swipeThreshold ||
+        Math.abs(swipeOffsetY) > options.swipeThreshold
+      ) {
+        swipeState = 2;
+        pixelOffsetX = swipeOffsetX;
+        pixelOffsetY = swipeOffsetY;
+      }
+    }
+
+    return swipeTarget; // Return element available for chaining.
+  };
+})(jQuery);
+
+// remove scroll for mobile IOS issue
+function preventDefault(e){e.preventDefault();}
+function disableScroll(){
+    document.body.addEventListener('touchmove', preventDefault, { passive: false });
+}
+function enableScroll(){
+    document.body.removeEventListener('touchmove', preventDefault, { passive: false });
+}
+disableScroll();
+
+// https://www.theodinproject.com/courses/javascript-and-jquery/lessons/jquery-and-the-dom
